@@ -1,227 +1,371 @@
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
+#include "vent.h"
 
-const char* ssid = "Home";
-const char* password = "18231823";
-String webpage = "marysgreenhouse"; 
- 
-ESP8266WebServer server(80);
+unsigned long currentMillis = 0;
+unsigned long prevMillis = 0;
+const int interva1 = 500;
+int debugVal = 1; // Debug: 0 off, 1 on
 
-//Handles http request 
-void handleRoot() {
-  digitalWrite(2, 0);   //Blinks on board led on page request 
-  server.send(200, "text/plain", "Placeholder for greenhouse info");
-  digitalWrite(2, 1);
-}
+                            //LCD variables
+
+
+                            
                             //Selector switch variables
+int modePin = 13;
 
+int mode;
+String modeString;
+int up = 23;
+int down = 25;
+int upButtonPinStatus;
+int downButtonPinStatus;
                             
                             //Vent Variables
-int AopenSwitch = 16; //D0
-int AclosedSwitch = 14; //D5
-int BopenSwitch = 12; //D6
-int BclosedSwitch = 13; //D7
-int ventAopenStatus;
-int ventAclosedStatus;
-int ventBopenStatus;
-int ventBclosedStatus;
+int openedSwitchA = 9; //D0
+int closedSwitchA = 10; //D5
+int openedSwitchB = 11; //D6
+int closedSwitchB = 12; //D7
+
+int ventAOpenedPinStatus;
+int ventAClosedPinStatus;
+int ventBOpenedPinStatus;
+int ventBClosedPinStatus;
+
+int overallVentStatus;
+
 String statusInfo;
 String vents;
+int closed = 0;
+int opened = 1;
+int intermittent = 2;
+int error = 3;
                             //Motor variables
-
                             
+int motorAEnabled = 27;
+int motorAopen = 2;
+int motorAclose = 3;
+int motorBEnabled = 29;
+int motorBopen = 4;
+int motorBclose = 5;
+double pwmSignal = 0;
+double pwmInterval = .5;
+int pwmMax = 255;                          
                             //Sensor variables
+//int windSpeedPin = ;
+int luminancePin = A0;
+//int barometerPin = ;
+//int tempPinOne = ;
+//int tempPinTwo = ;
 
-
+int windSpeed;
+int luminance;
+int sunlight = 1000;
+int mid = 500;
+int dark = 0;
+String luminanceString;
+//int barometer;
+int barometerChange;
+//int tempOne;
+//int tempTwo;
+bool safe;
                             //LED variables
-int openLED = 4; //D2
-int closedLED = 5; //D1
+int openLED = 6; //D2
+int closedLED = 7; //D1
+int manualLED = 8;
 
+                            //State machine variables
+int ventACurrentState;
+int ventBCurrentState;
+int motorACurrentState;
+int motorBCurrentState;
+int modeCurrentState;                 
+int upCurrentState;
+int downCurrentState;
 
-// the setup function runs once when you press reset or power the board
+//Instantiate vents
+
+Vent ventA(openedSwitchA, closedSwitchA, ventAOpenedPinStatus, ventAClosedPinStatus, motorAEnabled, motorAopen, motorAclose, ventACurrentState, upCurrentState, downCurrentState);
+Vent ventB(openedSwitchB, closedSwitchB, ventBOpenedPinStatus, ventBClosedPinStatus, motorBEnabled, motorBopen, motorBclose, ventBCurrentState, upCurrentState, downCurrentState);
+
 void setup() {
-
-  pinMode(AopenSwitch, INPUT);
-  pinMode(AclosedSwitch, INPUT);
-  pinMode(BopenSwitch, INPUT);
-  pinMode(BclosedSwitch, INPUT);
+  ventA.begin();
+  ventB.begin();  
+  
+  pinMode(modePin, INPUT);
+   
   pinMode(openLED, OUTPUT);
   pinMode(closedLED, OUTPUT);
+  pinMode(manualLED, OUTPUT);
+
   
-  Serial.begin(115200);
-  wifiBegin();
+  digitalWrite(openLED, LOW);
+  digitalWrite(closedLED, LOW);
+  digitalWrite(manualLED, LOW);
 
-
+  Serial.begin(9600);
 }
 
 // the loop function runs over and over again forever
 void loop() {
-  ventAopenStatus = digitalRead(AopenSwitch);
-  ventAclosedStatus = digitalRead(AclosedSwitch);
-  ventBopenStatus = digitalRead(BopenSwitch);
-  ventBclosedStatus = digitalRead(BclosedSwitch);
+  currentMillis = millis();   
+  getDebug();
 
-  int ventStatusA = getVentStatus(ventAopenStatus, ventAclosedStatus);
-  int ventStatusB = getVentStatus(ventBopenStatus, ventBclosedStatus);
-  int overallVentStatus = getOverallVentStatus(ventStatusA, ventStatusB);
+
+  ventA.getVentStatus();
+  ventB.getVentStatus();
+   
+  checkWeather();
+  getMode();
+
+
+        
+  int overallVentStatus = getOverallVentStatus(ventA, ventB);
+
+
+ //if(safe == true){  
+    switch(mode){
+//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual      
+      case 0: 
+        upButtonPinStatus = digitalRead(up);
+        downButtonPinStatus = digitalRead(down);
+        digitalWrite(manualLED, HIGH);   \
+         
+        switch(overallVentStatus){
+          case 0:
+            digitalWrite(closedLED, HIGH);
+            digitalWrite(openLED, LOW);     
+            vents = "closed";
+            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
+              pwmSignal = 0; 
+            }              
+            if(downButtonPinStatus == 1 && upButtonPinStatus == 0){
+              if(ventA.getVentStatus() == opened || ventA.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;                
+                  ventA.closeVent(pwmSignal);
+                }
+              }
+              else{
+                ventA.stopVent();
+              }
+              if(ventB.getVentStatus() == opened || ventB.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;                
+                  ventB.closeVent(pwmSignal);
+                }
+              }
+              else{
+                ventB.stopVent();
+              }
+            }  
+               
+            break;
+            
+          case 1:
+            digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, HIGH);
+            vents = "opened"; 
+            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
+              pwmSignal = 0; 
+            }              
+            if(upButtonPinStatus == 1){
+              if(ventA.getVentStatus() == closed || ventA.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;
+                  ventA.openVent(pwmSignal);
+                }
+              }
+              else{
+                ventA.stopVent();
+              }
+              
+              if(ventB.getVentStatus() == closed || ventB.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;
+                  ventB.openVent(pwmSignal);
+                }
+              }
+              else{
+                ventB.stopVent();
+              }
+            }      
+            
+            break;
+            
+          case 2:
+            digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+            vents = "intermittent";
+            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
+              pwmSignal = 0; 
+            }
+//Up button              
+            if(upButtonPinStatus == 1){
+              if(ventA.getVentStatus() == closed || ventA.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;
+                  ventA.openVent(pwmSignal);
+                }
+              }
+              else{
+                ventA.stopVent();
+              }
+              
+              if(ventB.getVentStatus() == closed || ventB.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;
+                  ventB.openVent(pwmSignal);
+                }
+              }
+              else{
+                ventB.stopVent();
+              }
+            }
+
+//Down button          
+            if(downButtonPinStatus == 1 && upButtonPinStatus == 0){
+              if(ventA.getVentStatus() == opened || ventA.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;                
+                  ventA.closeVent(pwmSignal);
+                }
+              }
+              else{
+                ventA.stopVent();
+              }
+              if(ventB.getVentStatus() == opened || ventB.getVentStatus() == intermittent){
+                if(pwmSignal <= pwmMax){
+                  pwmSignal = pwmSignal + pwmInterval;                
+                  ventB.closeVent(pwmSignal);
+                }
+              }
+              else{
+                ventB.stopVent();
+              }
+            }
+            
+          if(downButtonPinStatus == 0 && upButtonPinStatus == 0){
+            ventA.stopVent();
+            ventB.stopVent();
+          }      
+              
+            break;
+            
+          case 3:
+            digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+            vents = "error";   
+            // Blink all LEDs every 3 seconds
+            
+            break;
+          default:digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+    
+    
+            
+            break;
+        }
+      break;
+//automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic      
+      case 1:
+        digitalWrite(manualLED, LOW);
+        switch(overallVentStatus){
+            case 0:digitalWrite(closedLED, HIGH);
+            digitalWrite(openLED, LOW);
+            vents = "closed"; 
+    
+            
+            break;
+          case 1:digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, HIGH);
+            vents = "opened";   
+    
+            
+            break;
+          case 2:digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+            vents = "intermittent";   
+    
+            
+            break;
+          case 3:digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+            vents = "error";   
+    
+            
+            break;
+          default:digitalWrite(closedLED, LOW);
+            digitalWrite(openLED, LOW);
+    
+    
+            
+            break;
+        }
+      break;    
+    }
+
+
+
+}
+
+void checkWeather(){
+  luminance = analogRead(luminancePin);
+  luminance = 1023 - luminance;
+  if(luminance >= sunlight){
+    luminanceString = "sunlight";
+  }
+  if(luminance >= mid && luminance < sunlight){
+    luminanceString = "mid";
+  }
+  if(luminance <mid){
+    luminanceString = "dark";
+  }
   
-  Serial.print("Overall Vent Status: ");
-  Serial.println(overallVentStatus);
-  Serial.println(vents);  
-  Serial.print("Vent Status A: ");
-  Serial.println(ventStatusA);
-  Serial.println(ventAopenStatus); 
-  Serial.println(ventAclosedStatus);   
-  Serial.print("Vent Status B: ");
-  Serial.println(ventStatusB);
-  Serial.println(ventBopenStatus); 
-  Serial.println(ventBclosedStatus); 
-     
-  server.handleClient();
-  MDNS.update();
+  if(windSpeed <= 15 || barometerChange ){ //-2hPa/3h
+    safe = true;
+  }
+  else{
+    safe = false;
+  }
 }
 
-int getVentStatus(int openStatus, int closedStatus){
-  int ventStatus;
-  if(openStatus == 0 && closedStatus == 1){
-    ventStatus = 0;
-    statusInfo = "CLOSED";
-    //Motor Stops
+void getMode(){
+  if(digitalRead(modePin) == 0){
+    mode = 0; //manual
+    modeString = "manual";
   }
-  if(openStatus == 1 && closedStatus == 0){
-    ventStatus = 1;
-    statusInfo = "OPEN";
-    //Motor Stops
+  else{
+    mode = 1; //automatic
+    modeString = "automatic";
   }
-  if(openStatus == 0 && closedStatus == 0){
-    ventStatus = 2;
-    statusInfo = "Intermitant";
-  }
-  if(openStatus == 1 && closedStatus == 1){
-    ventStatus = 3;
-    statusInfo = "ERROR";
-  }
-  return ventStatus;
 }
 
-int getOverallVentStatus(int ventStatusA, int ventStatusB){
-  int overallVentStatus;
-  if(ventStatusA == 0 && ventStatusB == 0){
+int getOverallVentStatus(Vent ventAStatus, Vent ventBStatus){
+  if(ventA.getVentStatus() == 0 && ventB.getVentStatus() == 0){
     overallVentStatus = 0;
-    vents = "All Vents Closed";
-    digitalWrite(closedLED, HIGH);
-    digitalWrite(openLED, LOW);
   }
-  if(ventStatusA == 1 && ventStatusB == 1){
+  if(ventA.getVentStatus() == 1 && ventB.getVentStatus() == 1){
     overallVentStatus = 1;
-    vents = "All Vents Open";
-    digitalWrite(openLED, HIGH);
-    digitalWrite(closedLED, LOW);
   }
-  if(ventStatusA == 2 || ventStatusB == 2 || ventStatusA == 3 || ventStatusB == 3){
+  if(ventA.getVentStatus() == 2 || ventB.getVentStatus() == 2){
+    overallVentStatus = 2;
+  }
+  if((ventA.getVentStatus() == 1 && ventB.getVentStatus() == 0) || (ventA.getVentStatus() == 0 && ventB.getVentStatus() == 1)){
     overallVentStatus = 3;
-    vents = "Issue with vents";
-    digitalWrite(openLED, LOW);
-    digitalWrite(closedLED, LOW);
   }
   return overallVentStatus;
 }
 
-void wifiBegin(){
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+void getDebug(){
+  if(debugVal == 1){
+    Serial.print("MODE: ");Serial.println(modeString);
+    Serial.print("Luminance: ");Serial.println(luminance);    
+    Serial.print("Motor A: "); Serial.println(digitalRead(motorAEnabled));
+    Serial.print("Motor B: "); Serial.println(digitalRead(motorBEnabled));    
+    Serial.print("Up button status: "); Serial.println(upButtonPinStatus);
+    Serial.print("Down button status: "); Serial.println(downButtonPinStatus);    
+    Serial.print("Vent A: "); Serial.println(ventA.getVentStatus());
+    Serial.print("Vent B: "); Serial.println(ventB.getVentStatus());  
+    Serial.print("Overall vent status: "); Serial.println(overallVentStatus);
+    Serial.print("Vent Status: ");    Serial.println(vents);
   }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());   //You can get IP address assigned to ESP
-
-   if(WiFi.status() == WL_CONNECTED) //If WiFi connected to hot spot then start mDNS
-  {
-    if (MDNS.begin(webpage)) {  //Start mDNS with name esp8266
-      Serial.println("MDNS started");
-    }
-  }
-
-  server.on("/", handle_OnConnect);
-  server.onNotFound(handle_NotFound);
-    
-  server.begin();                           //Start server
-  Serial.println("HTTP server started");
-}
-
-void handle_OnConnect() {
-  server.send(200, "text/html", SendHTML(vents, statusInfo)); 
-}
-void handle_NotFound(){
-  server.send(404, "text/plain", "Not found");
-}
-
-String SendHTML(String vents, String statusInfo){
-  String ptr = "<!DOCTYPE html> <html>\n";
-  ptr +="<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-  ptr +="<link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300,400,600\" rel=\"stylesheet\">\n";
-  ptr +="<title>Mary's Greenhouse</title>\n";
-  ptr +="<style>html { font-family: 'Open Sans', sans-serif; display: block; margin: 0px auto; text-align: center;color: #333333;}\n";
-  ptr +="body{margin-top: 50px;}\n";
-  ptr +="h1 {margin: 50px auto 30px;}\n";
-  ptr +=".side-by-side{display: inline-block;vertical-align: middle;position: relative;}\n";
-  ptr +=".humidity-icon{background-color: #3498db;width: 30px;height: 30px;border-radius: 50%;line-height: 36px;}\n";
-  ptr +=".humidity-text{font-weight: 600;padding-left: 15px;font-size: 19px;width: 160px;text-align: left;}\n";
-  ptr +=".humidity{font-weight: 300;font-size: 60px;color: #3498db;}\n";
-  ptr +=".temperature-icon{background-color: #f39c12;width: 30px;height: 30px;border-radius: 50%;line-height: 40px;}\n";
-  ptr +=".temperature-text{font-weight: 600;padding-left: 15px;font-size: 19px;width: 160px;text-align: left;}\n";
-  ptr +=".temperature{font-weight: 300;font-size: 60px;color: #f39c12;}\n";
-  ptr +=".superscript{font-size: 17px;font-weight: 600;position: absolute;right: -20px;top: 15px;}\n";
-  ptr +=".data{padding: 10px;}\n";
-  ptr +="</style>\n";
-  ptr +="</head>\n";
-  ptr +="<body>\n";
-  
-   ptr +="<div id=\"webpage\">\n";
-   
-   ptr +="<h1>Mary's Greenhouse</h1>\n";
-   
-   ptr +="<div class=\"data\">\n";
-   ptr +="<div class=\"side-by-side temperature-icon\">\n";
-   ptr +="<svg version=\"1.1\" id=\"Layer_1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n";
-   ptr +="width=\"9.915px\" height=\"22px\" viewBox=\"0 0 9.915 22\" enable-background=\"new 0 0 9.915 22\" xml:space=\"preserve\">\n";
-   ptr +="<path fill=\"#FFFFFF\" d=\"M3.498,0.53c0.377-0.331,0.877-0.501,1.374-0.527C5.697-0.04,6.522,0.421,6.924,1.142\n";
-   ptr +="c0.237,0.399,0.315,0.871,0.311,1.33C7.229,5.856,7.245,9.24,7.227,12.625c1.019,0.539,1.855,1.424,2.301,2.491\n";
-   ptr +="c0.491,1.163,0.518,2.514,0.062,3.693c-0.414,1.102-1.24,2.038-2.276,2.594c-1.056,0.583-2.331,0.743-3.501,0.463\n";
-   ptr +="c-1.417-0.323-2.659-1.314-3.3-2.617C0.014,18.26-0.115,17.104,0.1,16.022c0.296-1.443,1.274-2.717,2.58-3.394\n";
-   ptr +="c0.013-3.44,0-6.881,0.007-10.322C2.674,1.634,2.974,0.955,3.498,0.53z\"/>\n";
-   ptr +="</svg>\n";
-   ptr +="</div>\n";
-   ptr +="<div class=\"side-by-side temperature-text\">Vent Status:</div>\n";
-   ptr +="<div class=\"side-by-side temperature\">";
-   ptr +=(String)vents;
-   ptr +="<div class=\"data\">\n";
-   ptr +="<div class=\"side-by-side humidity-icon\">\n";
-   ptr +="<svg version=\"1.1\" id=\"Layer_2\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\"; width=\"12px\" height=\"17.955px\" viewBox=\"0 0 13 17.955\" enable-background=\"new 0 0 13 17.955\" xml:space=\"preserve\">\n";
-   ptr +="<path fill=\"#FFFFFF\" d=\"M1.819,6.217C3.139,4.064,6.5,0,6.5,0s3.363,4.064,4.681,6.217c1.793,2.926,2.133,5.05,1.571,7.057\n";
-   ptr +="c-0.438,1.574-2.264,4.681-6.252,4.681c-3.988,0-5.813-3.107-6.252-4.681C-0.313,11.267,0.026,9.143,1.819,6.217\"></path>\n";
-   ptr +="</svg>\n";
-   ptr +="</div>\n";
-   ptr +="<div class=\"side-by-side humidity-text\">Humidity</div>\n";
-   ptr +="<div class=\"side-by-side humidity\">";
-   ptr +=(String)statusInfo;
-   ptr +="</div>\n";
-
-  ptr +="</div>\n";
-  ptr +="</body>\n";
-  ptr +="</html>\n";
-  return ptr;
 }
