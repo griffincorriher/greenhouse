@@ -109,202 +109,30 @@ void loop() {
   currentMillis = millis();   
   getDebug();
 
-
   ventA.getVentStatus();
   ventB.getVentStatus();
    
   checkWeather();
   getMode();
+     
+  getOverallVentStatus(ventA, ventB);
 
-
-        
-  int overallVentStatus = getOverallVentStatus(ventA, ventB);
-
-
- //if(safe == true){  
-    switch(mode){
-//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual      
-      case 0: 
-        upButtonPinStatus = digitalRead(up);
-        downButtonPinStatus = digitalRead(down);
-        digitalWrite(manualLED, HIGH);   \
-         
-        switch(overallVentStatus){
-          case 0:
-            digitalWrite(closedLED, HIGH);
-            digitalWrite(openLED, LOW);     
-            vents = "closed";
-            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
-              pwmSignal = 0; 
-            }              
-            if(downButtonPinStatus == 1 && upButtonPinStatus == 0){
-              if(ventA.getVentStatus() == opened || ventA.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;                
-                  ventA.closeVent(pwmSignal);
-                }
-              }
-              else{
-                ventA.stopVent();
-              }
-              if(ventB.getVentStatus() == opened || ventB.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;                
-                  ventB.closeVent(pwmSignal);
-                }
-              }
-              else{
-                ventB.stopVent();
-              }
-            }  
-               
-            break;
-            
-          case 1:
-            digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, HIGH);
-            vents = "opened"; 
-            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
-              pwmSignal = 0; 
-            }              
-            if(upButtonPinStatus == 1){
-              if(ventA.getVentStatus() == closed || ventA.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;
-                  ventA.openVent(pwmSignal);
-                }
-              }
-              else{
-                ventA.stopVent();
-              }
-              
-              if(ventB.getVentStatus() == closed || ventB.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;
-                  ventB.openVent(pwmSignal);
-                }
-              }
-              else{
-                ventB.stopVent();
-              }
-            }      
-            
-            break;
-            
-          case 2:
-            digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-            vents = "intermittent";
-            if(upButtonPinStatus == 0 && downButtonPinStatus == 0){
-              pwmSignal = 0; 
-            }
-//Up button              
-            if(upButtonPinStatus == 1){
-              if(ventA.getVentStatus() == closed || ventA.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;
-                  ventA.openVent(pwmSignal);
-                }
-              }
-              else{
-                ventA.stopVent();
-              }
-              
-              if(ventB.getVentStatus() == closed || ventB.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;
-                  ventB.openVent(pwmSignal);
-                }
-              }
-              else{
-                ventB.stopVent();
-              }
-            }
-
-//Down button          
-            if(downButtonPinStatus == 1 && upButtonPinStatus == 0){
-              if(ventA.getVentStatus() == opened || ventA.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;                
-                  ventA.closeVent(pwmSignal);
-                }
-              }
-              else{
-                ventA.stopVent();
-              }
-              if(ventB.getVentStatus() == opened || ventB.getVentStatus() == intermittent){
-                if(pwmSignal <= pwmMax){
-                  pwmSignal = pwmSignal + pwmInterval;                
-                  ventB.closeVent(pwmSignal);
-                }
-              }
-              else{
-                ventB.stopVent();
-              }
-            }
-            
-          if(downButtonPinStatus == 0 && upButtonPinStatus == 0){
-            ventA.stopVent();
-            ventB.stopVent();
-          }      
-              
-            break;
-            
-          case 3:
-            digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-            vents = "error";   
-            // Blink all LEDs every 3 seconds
-            
-            break;
-          default:digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-    
-    
-            
-            break;
-        }
+   //if(safe == true){  
+  switch(mode){
+  //manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual//manual      
+    case 0: 
+      manuallyControlVents();     
       break;
-//automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic      
-      case 1:
-        digitalWrite(manualLED, LOW);
-        switch(overallVentStatus){
-            case 0:digitalWrite(closedLED, HIGH);
-            digitalWrite(openLED, LOW);
-            vents = "closed"; 
-    
-            
-            break;
-          case 1:digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, HIGH);
-            vents = "opened";   
-    
-            
-            break;
-          case 2:digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-            vents = "intermittent";   
-    
-            
-            break;
-          case 3:digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-            vents = "error";   
-    
-            
-            break;
-          default:digitalWrite(closedLED, LOW);
-            digitalWrite(openLED, LOW);
-    
-    
-            
-            break;
-        }
-      break;    
-    }
-
-
-
+  
+      
+  //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic //automatic      
+    case 1:
+      //automaticallyControlVents();
+      break;
+  
+    default:
+      break;
+  }
 }
 
 void checkWeather(){
@@ -332,28 +160,105 @@ void getMode(){
   if(digitalRead(modePin) == 0){
     mode = 0; //manual
     modeString = "manual";
+    digitalWrite(manualLED, HIGH);     
   }
   else{
     mode = 1; //automatic
     modeString = "automatic";
+    digitalWrite(manualLED, LOW); 
   }
 }
 
 int getOverallVentStatus(Vent ventAStatus, Vent ventBStatus){
   if(ventA.getVentStatus() == 0 && ventB.getVentStatus() == 0){
     overallVentStatus = 0;
+    digitalWrite(closedLED, HIGH);
+    digitalWrite(openLED, LOW);     
+    vents = "closed";    
   }
   if(ventA.getVentStatus() == 1 && ventB.getVentStatus() == 1){
     overallVentStatus = 1;
+    digitalWrite(closedLED, LOW);
+    digitalWrite(openLED, HIGH);
+    vents = "opened";     
   }
   if(ventA.getVentStatus() == 2 || ventB.getVentStatus() == 2){
     overallVentStatus = 2;
+    digitalWrite(closedLED, LOW);
+    digitalWrite(openLED, LOW);
+    vents = "intermittent";    
   }
   if((ventA.getVentStatus() == 1 && ventB.getVentStatus() == 0) || (ventA.getVentStatus() == 0 && ventB.getVentStatus() == 1)){
     overallVentStatus = 3;
+    digitalWrite(closedLED, LOW);
+    digitalWrite(openLED, LOW);
+    vents = "error";   
+    // Blink all LEDs every 3 seconds    
   }
   return overallVentStatus;
 }
+
+void manuallyControlVents(){ 
+  upButtonPinStatus = digitalRead(up);
+  downButtonPinStatus = digitalRead(down);
+      
+//Up button              
+  if(upButtonPinStatus == 1 && downButtonPinStatus == 0){
+    if(ventA.getVentStatus() == closed || ventA.getVentStatus() == intermittent){
+      if(pwmSignal <= pwmMax){
+        pwmSignal = pwmSignal + pwmInterval;
+        ventA.openVent(pwmSignal);
+      }
+    }
+    else{
+      ventA.stopVent();
+    }
+    
+    if(ventB.getVentStatus() == closed || ventB.getVentStatus() == intermittent){
+      if(pwmSignal <= pwmMax){
+        pwmSignal = pwmSignal + pwmInterval;
+        ventB.openVent(pwmSignal);
+      }
+    }
+    else{
+      ventB.stopVent();
+    }
+  }
+
+//Down button          
+  if(downButtonPinStatus == 1 && upButtonPinStatus == 0){
+    if(ventA.getVentStatus() == opened || ventA.getVentStatus() == intermittent){
+      if(pwmSignal <= pwmMax){
+        pwmSignal = pwmSignal + pwmInterval;                
+        ventA.closeVent(pwmSignal);
+      }
+    }
+    else{
+      ventA.stopVent();
+    }
+    if(ventB.getVentStatus() == opened || ventB.getVentStatus() == intermittent){
+      if(pwmSignal <= pwmMax){
+        pwmSignal = pwmSignal + pwmInterval;                
+        ventB.closeVent(pwmSignal);
+      }
+    }
+    else{
+      ventB.stopVent();
+    }
+  }
+  
+  if(downButtonPinStatus == 0 && upButtonPinStatus == 0){
+    ventA.stopVent();
+    ventB.stopVent();
+    pwmSignal = 0;
+  } 
+}
+
+
+
+
+
+
 
 void getDebug(){
   if(debugVal == 1){
